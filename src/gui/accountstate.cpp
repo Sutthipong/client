@@ -82,6 +82,7 @@ AccountState::AccountState(AccountPtr account)
         this, &AccountState::slotCredentialsAsked);
     connect(account.data(), &Account::unknownConnectionState,
         this, [this] {
+            _account->jobQueue()->block(true);
             checkConnectivity(true);
         });
     connect(account.data(), &Account::requestUrlUpdate, this, [this](const QUrl &newUrl) {
@@ -279,6 +280,7 @@ void AccountState::checkConnectivity(bool verifyOnly)
 void AccountState::slotConnectionValidatorResult(ConnectionValidator::Status status, const QStringList &errors)
 {
     if (isSignedOut()) {
+        _account->jobQueue()->clear();
         qCWarning(lcAccountState) << "Signed out, ignoring" << status << _account->url().toString();
         return;
     }
@@ -313,6 +315,7 @@ void AccountState::slotConnectionValidatorResult(ConnectionValidator::Status sta
         if (_state != Connected) {
             setState(Connected);
         }
+        _account->jobQueue()->block(false);
         break;
     case ConnectionValidator::Undefined:
     case ConnectionValidator::NotConfigured:

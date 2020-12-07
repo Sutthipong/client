@@ -174,6 +174,10 @@ void Account::setCredentials(AbstractCredentials *cred)
         this, &Account::slotCredentialsFetched);
     connect(_credentials.data(), &AbstractCredentials::asked,
         this, &Account::slotCredentialsAsked);
+    connect(_credentials.data(), &AbstractCredentials::authenticationStarted, this, [this] {
+        _jobQueue.block(true);
+    });
+    connect(_credentials.data(), &AbstractCredentials::authenticationFailed, &_jobQueue, &JobQueue::clear);
 }
 
 QUrl Account::davUrl() const
@@ -254,13 +258,6 @@ QNetworkReply *Account::sendRawRequest(const QByteArray &verb, const QUrl &url, 
         return _am->deleteResource(req);
     }
     return _am->sendCustomRequest(req, verb, data);
-}
-
-SimpleNetworkJob *Account::sendRequest(const QByteArray &verb, const QUrl &url, QNetworkRequest req, QIODevice *data)
-{
-    auto job = new SimpleNetworkJob(sharedFromThis());
-    job->startRequest(verb, url, req, data);
-    return job;
 }
 
 void Account::setSslConfiguration(const QSslConfiguration &config)
@@ -408,6 +405,7 @@ void Account::slotHandleSslErrors(QNetworkReply *reply, QList<QSslError> errors)
 void Account::slotCredentialsFetched()
 {
     emit credentialsFetched(_credentials.data());
+    _jobQueue.block(false);
 }
 
 void Account::slotCredentialsAsked()
@@ -418,6 +416,11 @@ void Account::slotCredentialsAsked()
 void Account::handleInvalidCredentials()
 {
     emit invalidCredentials();
+}
+
+JobQueue *Account::jobQueue()
+{
+    return &_jobQueue;
 }
 
 void Account::clearQNAMCache()
